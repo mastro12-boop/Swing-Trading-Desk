@@ -1,4 +1,196 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
+
+// --- THEME SYSTEM ---
+const THEMES = {
+  dark: { name: "Dark Pro", swatch: "#0c0f14", swatchBorder: "#6ee7b7",
+    bg: "#0c0f14", bg2: "#111520", bg3: "#0f1a12", border: "#1e2330", text: "#e2e4e9", textBright: "#f0f2f5", muted: "#7a8194", dim: "#5a6478", dimmer: "#3a4258",
+    accent: "#6ee7b7", accentBg: "#1a3a2a", accentBorder: "#2a5a3a", accentDark: "#0c0f14",
+    blue: "#60a5fa", blueBg: "#1a1a3a", blueBorder: "#2a2a5a",
+    purple: "#a78bba", purpleBg: "#1a1520", purpleBorder: "#2d2235",
+    green: "#22c55e", red: "#ef4444", yellow: "#eab308", orange: "#f97316",
+    cardBg: "#111520", cardBorder: "#1e2330", inputBg: "#0c0f14", inputBorder: "#1e2330",
+    pulseGradient: "linear-gradient(135deg,#111827 0%,#0f1a12 100%)", pulseBorder: "#1a3a2a",
+    navActiveBg: "#111520", tabActiveBg: "#111520",
+    shimmer1: "#1a1e2a", shimmer2: "#252a3a", bubbles: false,
+  },
+  rose: { name: "Rose Gold", swatch: "#1a0f14", swatchBorder: "#f0a0c0",
+    bg: "#1a0f14", bg2: "#251520", bg3: "#1f1018", border: "#3a2030", text: "#e8d0dc", textBright: "#f5e6ef", muted: "#a0708a", dim: "#805068", dimmer: "#503040",
+    accent: "#f0a0c0", accentBg: "#3a1a2a", accentBorder: "#5a2a4a", accentDark: "#1a0f14",
+    blue: "#b88fd0", blueBg: "#2a1530", blueBorder: "#4a2550",
+    purple: "#d4af37", purpleBg: "#2a2010", purpleBorder: "#4a3820",
+    green: "#e879a0", red: "#ef6080", yellow: "#d4af37", orange: "#e88060",
+    cardBg: "#251520", cardBorder: "#3a2030", inputBg: "#1a0f14", inputBorder: "#3a2030",
+    pulseGradient: "linear-gradient(135deg,#251520 0%,#1f1018 100%)", pulseBorder: "#5a2a4a",
+    navActiveBg: "#251520", tabActiveBg: "#251520",
+    shimmer1: "#2a1520", shimmer2: "#3a2030", bubbles: false,
+  },
+  ocean: { name: "Ocean Blue", swatch: "#0a1220", swatchBorder: "#4fc3f7",
+    bg: "#0a1220", bg2: "#0f1a2e", bg3: "#0c1525", border: "#1a2a40", text: "#c8dae8", textBright: "#e0eaf5", muted: "#6888a0", dim: "#4a7090", dimmer: "#2a4060",
+    accent: "#4fc3f7", accentBg: "#0f2a40", accentBorder: "#1a4060", accentDark: "#0a1220",
+    blue: "#4fc3f7", blueBg: "#0f2040", blueBorder: "#1a3060",
+    purple: "#80b0d0", purpleBg: "#0f1a2e", purpleBorder: "#1a2a40",
+    green: "#00bcd4", red: "#ff7043", yellow: "#ffb74d", orange: "#ff9800",
+    cardBg: "#0f1a2e", cardBorder: "#1a2a40", inputBg: "#0a1220", inputBorder: "#1a2a40",
+    pulseGradient: "linear-gradient(135deg,#0f1a2e 0%,#0c1525 100%)", pulseBorder: "#1a4060",
+    navActiveBg: "#0f1a2e", tabActiveBg: "#0f1a2e",
+    shimmer1: "#0f1a2e", shimmer2: "#1a2a40", bubbles: false,
+  },
+  light: { name: "Light Classic", swatch: "#f8f9fa", swatchBorder: "#1a7a4c",
+    bg: "#f8f9fa", bg2: "#ffffff", bg3: "#f0f2f4", border: "#dee2e6", text: "#212529", textBright: "#212529", muted: "#6c757d", dim: "#868e96", dimmer: "#adb5bd",
+    accent: "#1a7a4c", accentBg: "#e8f5e9", accentBorder: "#a5d6a7", accentDark: "#ffffff",
+    blue: "#007bff", blueBg: "#e3f2fd", blueBorder: "#90caf9",
+    purple: "#6f42c1", purpleBg: "#f3e5f5", purpleBorder: "#ce93d8",
+    green: "#28a745", red: "#dc3545", yellow: "#ffc107", orange: "#fd7e14",
+    cardBg: "#ffffff", cardBorder: "#dee2e6", inputBg: "#f8f9fa", inputBorder: "#dee2e6",
+    pulseGradient: "linear-gradient(135deg,#e8f5e9 0%,#f0f4f0 100%)", pulseBorder: "#a5d6a7",
+    navActiveBg: "#ffffff", tabActiveBg: "#ffffff",
+    shimmer1: "#e9ecef", shimmer2: "#f8f9fa", bubbles: false,
+  },
+  bubblegum: { name: "Bubblegum", swatch: "#fff5f8", swatchBorder: "#e84393",
+    bg: "#fff5f8", bg2: "rgba(255,255,255,0.8)", bg3: "#ffe8f0", border: "#f0c0d0", text: "#2d1f3d", textBright: "#2d1f3d", muted: "#a0708a", dim: "#b08098", dimmer: "#d0a0b8",
+    accent: "#e84393", accentBg: "#fff0f5", accentBorder: "#f0a0c0", accentDark: "#ffffff",
+    blue: "#b060d0", blueBg: "#f8e8ff", blueBorder: "#d0a0e0",
+    purple: "#e84393", purpleBg: "#fff0f5", purpleBorder: "#f0c0d0",
+    green: "#22a060", red: "#d04060", yellow: "#e88030", orange: "#e86840",
+    cardBg: "rgba(255,255,255,0.8)", cardBorder: "#f0c0d0", inputBg: "#fff5f8", inputBorder: "#f0c0d0",
+    pulseGradient: "linear-gradient(135deg,#fff0f5 0%,#ffe8f0 100%)", pulseBorder: "#f0a0c0",
+    navActiveBg: "rgba(255,255,255,0.8)", tabActiveBg: "rgba(255,255,255,0.8)",
+    shimmer1: "#ffe8f0", shimmer2: "#fff5f8", bubbles: true,
+  },
+};
+
+// Generate styles from theme
+function makeStyles(t) {
+  return {
+    shell: { fontFamily: "'Inter',-apple-system,system-ui,sans-serif", background: t.bg, color: t.text, minHeight: "100vh", padding: "0 16px 40px", maxWidth: 1200, margin: "0 auto", lineHeight: 1.55, position: "relative", overflow: "hidden" },
+    header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "28px 0 16px", borderBottom: `1px solid ${t.border}`, flexWrap: "wrap", gap: 12 },
+    headerInner: { display: "flex", alignItems: "center", gap: 14 },
+    logo: { fontSize: 32, color: t.accent, fontWeight: 300 },
+    h1: { margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.03em", color: t.textBright },
+    subtitle: { margin: "2px 0 0", fontSize: 13, color: t.muted, fontWeight: 400 },
+    navRibbon: { display: "flex", gap: 0, borderBottom: `1px solid ${t.border}`, margin: "0 0 8px", overflowX: "auto" },
+    navBtn: { padding: "10px 20px", fontSize: 13, fontWeight: 600, border: "none", borderBottom: "2px solid transparent", cursor: "pointer", background: "transparent", whiteSpace: "nowrap", letterSpacing: "0.01em" },
+    clockRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+    marketDot: { fontSize: 10 },
+    clockLabel: { fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" },
+    clockTime: { fontSize: 13, fontWeight: 600, color: t.textBright, fontFamily: "'SF Mono',monospace" },
+    clockDate: { fontSize: 11, color: t.dim },
+    disclaimer: { margin: "8px 0", padding: "8px 14px", background: t.purpleBg, border: `1px solid ${t.purpleBorder}`, borderRadius: 8, fontSize: 11, color: t.purple, lineHeight: 1.5 },
+    controlBar: { display: "flex", alignItems: "center", gap: 10, margin: "8px 0", flexWrap: "wrap" },
+    refreshBtn: { padding: "7px 16px", fontSize: 12, fontWeight: 700, background: t.accentBg, color: t.accent, border: `1px solid ${t.accentBorder}`, borderRadius: 6, cursor: "pointer" },
+    autoBtn: { padding: "7px 14px", fontSize: 11, fontWeight: 600, background: "transparent", color: t.muted, border: `1px solid ${t.border}`, borderRadius: 6, cursor: "pointer" },
+    lastLabel: { fontSize: 11, color: t.dim, fontFamily: "'SF Mono',monospace" },
+    aiBox: { margin: "8px 0 16px", padding: "14px 16px", background: t.pulseGradient, border: `1px solid ${t.pulseBorder}`, borderRadius: 10 },
+    aiHeader: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: t.accent },
+    aiResult: { fontSize: 13, color: t.text, marginTop: 10, lineHeight: 1.6 },
+    threeCol: { display: "flex", gap: 16, alignItems: "flex-start" },
+    leftSB: { width: 210, flexShrink: 0, position: "sticky", top: 20, alignSelf: "flex-start", maxHeight: "calc(100vh - 40px)", overflowY: "auto", overflowX: "hidden" },
+    centerCol: { flex: 1, minWidth: 0 },
+    rightSB: { width: 220, flexShrink: 0, position: "sticky", top: 20, alignSelf: "flex-start", maxHeight: "calc(100vh - 40px)", overflowY: "auto", overflowX: "hidden" },
+    calcBox: { background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 10, padding: "14px 12px", backdropFilter: t.bubbles ? "blur(8px)" : "none" },
+    calcHead: { display: "flex", alignItems: "center", gap: 6, marginBottom: 12 },
+    cLabel: { display: "block", fontSize: 9, fontWeight: 600, color: t.dim, marginTop: 8, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.06em" },
+    cInput: { width: "100%", padding: "6px 8px", fontSize: 12, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 4, color: t.textBright, outline: "none" },
+    cSelect: { width: "100%", padding: "6px 8px", fontSize: 12, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 4, color: t.textBright, outline: "none" },
+    cResults: { marginTop: 12, padding: "8px 0", borderTop: `1px solid ${t.border}` },
+    cRow: { display: "flex", justifyContent: "space-between", fontSize: 10, color: t.muted, padding: "3px 0" },
+    cGraph: { marginTop: 10 },
+    tabBar: { display: "flex", gap: 0, margin: "0 0 0", borderBottom: `1px solid ${t.border}`, overflowX: "auto" },
+    tabBtn: { flex: 1, padding: "10px 6px", fontSize: 11, fontWeight: 600, border: "none", borderBottom: "2px solid transparent", cursor: "pointer", textAlign: "center", borderRadius: "6px 6px 0 0", whiteSpace: "nowrap" },
+    picksHeading: { fontSize: 14, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: t.muted, margin: "20px 0 14px" },
+    card: { marginBottom: 18, padding: "20px", background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 12, backdropFilter: t.bubbles ? "blur(8px)" : "none" },
+    cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+    ticker: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.04em", color: t.textBright, fontFamily: "'SF Mono',monospace" },
+    companyName: { fontSize: 13, color: t.muted, marginTop: 2 },
+    convictionBadge: { display: "inline-block", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "3px 10px", borderRadius: 4, color: t.accentDark },
+    priceLabel: { fontSize: 18, fontWeight: 700, color: t.textBright, marginTop: 6 },
+    thesisLine: { marginTop: 14, fontSize: 14, fontWeight: 600, color: t.accent, letterSpacing: "0.01em" },
+    swingReason: { marginTop: 10, padding: "10px 12px", background: t.bg, borderRadius: 8, borderLeft: `3px solid ${t.accent}` },
+    swingReasonLabel: { fontSize: 9, fontWeight: 700, color: t.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 },
+    swingReasonText: { fontSize: 12, color: t.muted, lineHeight: 1.6, margin: 0 },
+    sortBar: { display: "flex", alignItems: "center", gap: 4, marginBottom: 14, flexWrap: "wrap" },
+    sortLabel: { fontSize: 10, fontWeight: 600, color: t.dim, marginRight: 4 },
+    sortBtn: { padding: "4px 8px", fontSize: 9, fontWeight: 600, background: "transparent", color: t.dim, border: `1px solid ${t.border}`, borderRadius: 4, cursor: "pointer" },
+    metricsRow: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginTop: 16, padding: "12px 0", borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}` },
+    metric: { textAlign: "center" }, metricLabel: { fontSize: 10, fontWeight: 600, color: t.dim, textTransform: "uppercase", letterSpacing: "0.06em" }, metricValue: { fontSize: 15, fontWeight: 700, color: t.text, marginTop: 4 },
+    expandBtn: { marginTop: 14, width: "100%", padding: "8px", fontSize: 12, fontWeight: 600, background: "transparent", color: t.muted, border: `1px solid ${t.border}`, borderRadius: 6, cursor: "pointer" },
+    expandedArea: { marginTop: 16 }, section: { marginBottom: 16 }, sectionTitle: { fontSize: 11, fontWeight: 700, color: t.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 },
+    bulletItem: { fontSize: 13, color: t.text, marginBottom: 6, paddingLeft: 4, lineHeight: 1.55 }, bulletDot: { color: t.accent, marginRight: 6 },
+    techText: { fontSize: 13, color: t.text, margin: 0, lineHeight: 1.6 },
+    sourceLink: { fontSize: 11, color: t.accent, textDecoration: "none", background: t.accentBg, padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.accentBorder}`, display: "inline-block" },
+    sourceDate: { color: t.dim, fontSize: 10 },
+    removeBtn: { background: "none", border: "none", color: t.dimmer, fontSize: 14, cursor: "pointer", padding: "2px 6px" },
+    corrWarning: { display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: t.purpleBg, border: `1px solid ${t.purpleBorder}`, borderRadius: 6, fontSize: 10, color: t.yellow, marginBottom: 8 },
+    signalSummary: { padding: "10px 12px", background: t.bg, borderRadius: 8, marginBottom: 10 },
+    factorsGrid: { display: "flex", flexDirection: "column", gap: 6 },
+    factorCard: { padding: "8px 10px", background: t.bg, borderRadius: 6, borderLeft: `2px solid ${t.border}` },
+    factorLabel: { fontSize: 9, fontWeight: 700, color: t.muted, letterSpacing: "0.06em" },
+    factorVerdict: { fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: "auto" },
+    factorText: { fontSize: 10, color: t.muted, margin: "2px 0 0", lineHeight: 1.4 },
+    scanSection: { marginTop: 28, padding: "20px", background: t.cardBg, border: `1px solid ${t.blueBorder}`, borderRadius: 12, backdropFilter: t.bubbles ? "blur(8px)" : "none" },
+    scanHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
+    scanTitle: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: "0.06em", color: t.blue },
+    scanDesc: { margin: "4px 0 0", fontSize: 11, color: t.dim },
+    scanBtn: { padding: "8px 18px", fontSize: 12, fontWeight: 700, background: t.blueBg, color: t.blue, border: `1px solid ${t.blueBorder}`, borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+    scanLoading: { fontSize: 12, color: t.dim, padding: "16px 0", textAlign: "center" },
+    scanResults: { display: "flex", flexDirection: "column", gap: 12 },
+    scanCard: { padding: "14px", background: t.bg, border: `1px solid ${t.blueBorder}`, borderRadius: 8 },
+    scanCardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 },
+    scanTicker: { fontSize: 18, fontWeight: 800, color: t.textBright, fontFamily: "'SF Mono',monospace", marginRight: 8 },
+    scanName: { fontSize: 12, color: t.muted }, scanPrice: { fontSize: 15, fontWeight: 700, color: t.textBright },
+    scanConviction: { fontSize: 9, fontWeight: 700 }, scanThesis: { fontSize: 12, color: t.text, lineHeight: 1.5, marginBottom: 6 },
+    scanCatalyst: { fontSize: 11, color: t.text, marginBottom: 6 }, scanMetrics: { display: "flex", gap: 10, fontSize: 10, color: t.dim, flexWrap: "wrap", marginBottom: 6 },
+    promoteBtn: { width: "100%", padding: "6px", fontSize: 11, fontWeight: 600, background: t.blueBg, color: t.blue, border: `1px solid ${t.blueBorder}`, borderRadius: 5, cursor: "pointer" },
+    watchAddRow: { display: "flex", gap: 8, marginBottom: 14 },
+    watchInput: { flex: 1, padding: "8px 12px", fontSize: 13, background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 6, color: t.textBright, outline: "none" },
+    watchAddBtn: { padding: "8px 16px", fontSize: 12, fontWeight: 700, background: t.purpleBg, color: t.purple, border: `1px solid ${t.purpleBorder}`, borderRadius: 6, cursor: "pointer" },
+    emptyState: { padding: "40px 20px", textAlign: "center", background: t.cardBg, borderRadius: 10, border: `1px solid ${t.cardBorder}` },
+    watchCard: { padding: "12px 14px", background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 8 },
+    watchTicker: { fontSize: 16, fontWeight: 800, color: t.textBright, fontFamily: "'SF Mono',monospace" },
+    watchActionBtn: { padding: "3px 10px", fontSize: 10, fontWeight: 600, background: "transparent", color: t.accent, border: `1px solid ${t.accentBorder}`, borderRadius: 4, cursor: "pointer" },
+    analystCard: { padding: "16px", background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 10, backdropFilter: t.bubbles ? "blur(8px)" : "none" },
+    analystTicker: { fontSize: 20, fontWeight: 800, color: t.textBright, fontFamily: "'SF Mono',monospace", marginRight: 8 },
+    analystName: { fontSize: 13, color: t.muted }, analystPrice: { fontSize: 16, fontWeight: 700, color: t.textBright },
+    analystFirmRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" },
+    analystFirmBadge: { fontSize: 9, fontWeight: 700, background: t.blueBg, color: t.blue, padding: "2px 8px", borderRadius: 3 },
+    analystRating: { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em" },
+    analystAbout: { fontSize: 11.5, color: t.muted, lineHeight: 1.55, margin: "8px 0 10px", padding: "8px 10px", background: t.bg, borderRadius: 6, borderLeft: `2px solid ${t.border}` },
+    analystSectionLabel: { fontSize: 9, fontWeight: 700, color: t.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 },
+    methodology: { marginTop: 32, padding: "18px 20px", background: t.bg, border: `1px solid ${t.border}`, borderRadius: 10 },
+    methTitle: { margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: t.muted, textTransform: "uppercase" },
+    methBody: { fontSize: 12.5, color: t.muted, margin: 0, lineHeight: 1.6 },
+    footer: { marginTop: 32, textAlign: "center", fontSize: 11, color: t.dimmer, padding: "16px 0", borderTop: `1px solid ${t.border}` },
+    placeholder: { padding: "60px 20px", textAlign: "center", background: t.cardBg, borderRadius: 12, border: `1px solid ${t.cardBorder}`, margin: "20px 0" },
+  };
+}
+
+// Bubblegum animated bubbles component
+function BubbleBackground() {
+  const bubbles = [
+    { size: 90, top: "5%", left: "85%", dur: 6, delay: 0 },
+    { size: 55, top: "25%", left: "70%", dur: 8, delay: 1 },
+    { size: 130, top: "65%", left: "5%", dur: 10, delay: 2 },
+    { size: 40, top: "15%", left: "20%", dur: 7, delay: 3 },
+    { size: 70, top: "50%", left: "80%", dur: 9, delay: 0.5 },
+    { size: 48, top: "40%", left: "45%", dur: 7.5, delay: 4 },
+    { size: 30, top: "70%", left: "35%", dur: 6.5, delay: 2.5 },
+    { size: 60, top: "80%", left: "60%", dur: 8.5, delay: 1.5 },
+  ];
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+      {bubbles.map((b, i) => (
+        <div key={i} style={{
+          position: "absolute", top: b.top, left: b.left, width: b.size, height: b.size, borderRadius: "50%",
+          background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.95) 0%, rgba(255,182,217,0.4) 30%, rgba(255,105,180,0.25) 60%, rgba(255,20,147,0.08) 100%)`,
+          boxShadow: `inset -${b.size/20}px -${b.size/20}px ${b.size/10}px rgba(255,105,180,0.13), inset ${b.size/25}px ${b.size/25}px ${b.size/12}px rgba(255,255,255,0.85), 0 0 ${b.size/6}px rgba(255,105,180,0.08)`,
+          animation: `bubbleFloat${i%3} ${b.dur}s ease-in-out infinite ${b.delay}s`,
+        }} />
+      ))}
+    </div>
+  );
+}
 
 // --- Helpers ---
 function formatDate(d) { return d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
@@ -870,6 +1062,18 @@ function generateBaselineSignal(pick) {
 
 // ============ MAIN APP ============
 export default function SwingTradeDashboard() {
+  // Theme
+  const [themeId, setThemeId] = useState(() => {
+    try { return sessionStorage.getItem("std_theme") || "dark"; } catch { return "dark"; }
+  });
+  const T = THEMES[themeId] || THEMES.dark;
+  const S = makeStyles(T);
+
+  const switchTheme = (id) => {
+    setThemeId(id);
+    try { sessionStorage.setItem("std_theme", id); } catch {}
+  };
+
   const PULSE_FALLBACK = "Markets are in a period of heightened volatility as Q2 earnings season enters full swing. The S&P 500 is trading near key resistance levels, with technology and energy sectors leading the advance. VIX remains elevated around 18-20, suggesting traders should size positions conservatively. Swing setups favor stocks with near-term catalysts — earnings plays with defined risk-reward are the highest-probability trades in this environment. Watch for sector rotation signals as institutional money shifts between growth and value.";
 
   const [pulse, setPulse] = useState(PULSE_FALLBACK);
@@ -1192,17 +1396,33 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
 
   return (
     <div style={S.shell}>
-      <style>{shimmerCSS}{`@media(max-width:900px){.three-col{flex-direction:column!important}.left-sb,.right-sb{width:100%!important;position:static!important;max-height:none!important;flex-direction:row!important;flex-wrap:wrap!important;gap:12px!important}.left-sb>div,.right-sb>div{flex:1;min-width:200px}}`}</style>
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}.shimmer{background:linear-gradient(90deg,${T.shimmer1} 25%,${T.shimmer2} 50%,${T.shimmer1} 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}@media(max-width:900px){.three-col{flex-direction:column!important}.left-sb,.right-sb{width:100%!important;position:static!important;max-height:none!important;flex-direction:row!important;flex-wrap:wrap!important;gap:12px!important}.left-sb>div,.right-sb>div{flex:1;min-width:200px}}@keyframes bubbleFloat0{0%{transform:translateY(0) scale(1)}50%{transform:translateY(-60px) scale(1.1)}100%{transform:translateY(0) scale(1)}}@keyframes bubbleFloat1{0%{transform:translateY(0) scale(1)}50%{transform:translateY(-40px) scale(0.9)}100%{transform:translateY(0) scale(1)}}@keyframes bubbleFloat2{0%{transform:translateY(0) scale(1.05)}50%{transform:translateY(-80px) scale(0.95)}100%{transform:translateY(0) scale(1.05)}}`}</style>
+
+      {T.bubbles && <BubbleBackground />}
+
+      <div style={{ position: "relative", zIndex: 1 }}>
 
       {/* FULL-WIDTH TOP */}
       <header style={S.header}>
         <div style={S.headerInner}><div style={S.logo}>⟁</div><div><h1 style={S.h1}>Swing Trading Desk</h1><p style={S.subtitle}>Fully live AI-powered trade ideas</p></div></div>
-        <LiveClock />
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Theme picker */}
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            {Object.entries(THEMES).map(([id, theme]) => (
+              <button key={id} onClick={() => switchTheme(id)} title={theme.name} style={{
+                width: 18, height: 18, borderRadius: "50%", border: themeId === id ? `2px solid ${theme.swatchBorder}` : `1px solid ${T.border}`,
+                background: theme.swatch, cursor: "pointer", padding: 0, transition: "transform 0.15s",
+                transform: themeId === id ? "scale(1.2)" : "scale(1)",
+              }} />
+            ))}
+          </div>
+          <LiveClock />
+        </div>
       </header>
 
       <div style={S.navRibbon}>
         {[{id:"swing",l:"Swing Trading"},{id:"longterm",l:"Long Term"},{id:"shortterm",l:"Short Term"},{id:"earnings",l:"Earnings Calendar"},{id:"about",l:"About"},{id:"contact",l:"Contact Us"}].map(n=>(
-          <button key={n.id} onClick={()=>setNavPage(n.id)} style={{...S.navBtn,color:navPage===n.id?"#6ee7b7":"#7a8194",borderBottom:navPage===n.id?"2px solid #6ee7b7":"2px solid transparent",background:navPage===n.id?"#111520":"transparent"}}>{n.l}</button>
+          <button key={n.id} onClick={()=>setNavPage(n.id)} style={{...S.navBtn,color:navPage===n.id?T.accent:T.muted,borderBottom:navPage===n.id?`2px solid ${T.accent}`:"2px solid transparent",background:navPage===n.id?T.navActiveBg:"transparent"}}>{n.l}</button>
         ))}
       </div>
 
@@ -1269,7 +1489,7 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
           <div style={S.centerCol}>
             <div style={S.tabBar}>
               {[{id:"active",l:`🔥 AI Swing Hot List (${picks.length})`},{id:"watchlist",l:`☆ Watchlist (${watchlist.length})`},{id:"analyst",l:`◈ Analyst Picks (${ANALYST_PICKS.length})`}].map(t=>(
-                <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...S.tabBtn,color:activeTab===t.id?"#f0f2f5":"#5a6478",borderBottom:activeTab===t.id?"2px solid #6ee7b7":"2px solid transparent",background:activeTab===t.id?"#111520":"transparent"}}>{t.l}</button>
+                <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...S.tabBtn,color:activeTab===t.id?T.textBright:T.dim,borderBottom:activeTab===t.id?`2px solid ${T.accent}`:"2px solid transparent",background:activeTab===t.id?T.tabActiveBg:"transparent"}}>{t.l}</button>
               ))}
             </div>
 
@@ -1277,7 +1497,7 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
               <h2 style={S.picksHeading}>AI Swing Hot List{picksLoading&&<span style={{fontSize:10,color:"#eab308",marginLeft:8,fontWeight:400}}>updating…</span>}</h2>
               <div style={S.sortBar}><span style={S.sortLabel}>Sort:</span>
                 {[{id:"confidence",l:"Confidence"},{id:"newest",l:"Newest"},{id:"oldest",l:"Oldest"},{id:"priceDesc",l:"Price ↓"},{id:"priceAsc",l:"Price ↑"},{id:"alphaAsc",l:"A→Z"},{id:"alphaDesc",l:"Z→A"}].map(o=>(
-                  <button key={o.id} onClick={()=>setSortBy(o.id)} style={{...S.sortBtn,background:sortBy===o.id?"#1a3a2a":"transparent",color:sortBy===o.id?"#6ee7b7":"#5a6478",borderColor:sortBy===o.id?"#2a5a3a":"#1e2330"}}>{o.l}</button>
+                  <button key={o.id} onClick={()=>setSortBy(o.id)} style={{...S.sortBtn,background:sortBy===o.id?T.accentBg:"transparent",color:sortBy===o.id?T.accent:T.dim,borderColor:sortBy===o.id?T.accentBorder:T.border}}>{o.l}</button>
                 ))}
               </div>
               {sortedPicks.map(p=><PickCard key={p.ticker} pick={p} status={pickStatuses[p.ticker]||"ACTIVE"} onRemove={()=>removePick(p.ticker)} entrySignal={entrySignals[p.ticker]} sectorWarning={sectorWarnings[p.ticker]}/>)}
@@ -1449,115 +1669,14 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
         </div>
       )}
 
-      {navPage==="contact"&&<div style={S.placeholder}><div style={{fontSize:28,marginBottom:8}}>✉</div><h2 style={{color:"#f0f2f5",marginBottom:8}}>Contact Us</h2><p style={{color:"#5a6478"}}>Coming Soon</p></div>}
+      {navPage==="contact"&&<div style={S.placeholder}><div style={{fontSize:28,marginBottom:8}}>✉</div><h2 style={{color:T.textBright,marginBottom:8}}>Contact Us</h2><p style={{color:T.dim}}>Coming Soon</p></div>}
+      <Analytics />
+      <SpeedInsights />
+      </div>
     </div>
   );
 }
 
-// ============ STYLES ============
-const S = {
-  shell: { fontFamily: "'Inter',-apple-system,system-ui,sans-serif", background: "#0c0f14", color: "#e2e4e9", minHeight: "100vh", padding: "0 16px 40px", maxWidth: 1200, margin: "0 auto", lineHeight: 1.55 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "28px 0 16px", borderBottom: "1px solid #1e2330", flexWrap: "wrap", gap: 12 },
-  headerInner: { display: "flex", alignItems: "center", gap: 14 },
-  logo: { fontSize: 32, color: "#6ee7b7", fontWeight: 300 },
-  h1: { margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.03em", color: "#f0f2f5" },
-  subtitle: { margin: "2px 0 0", fontSize: 13, color: "#7a8194", fontWeight: 400 },
-  navRibbon: { display: "flex", gap: 0, borderBottom: "1px solid #1e2330", margin: "0 0 8px", overflowX: "auto" },
-  navBtn: { padding: "10px 20px", fontSize: 13, fontWeight: 600, border: "none", borderBottom: "2px solid transparent", cursor: "pointer", background: "transparent", whiteSpace: "nowrap", letterSpacing: "0.01em" },
-  clockRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  marketDot: { fontSize: 10 },
-  clockLabel: { fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" },
-  clockTime: { fontSize: 13, fontWeight: 600, color: "#f0f2f5", fontFamily: "'SF Mono',monospace" },
-  clockDate: { fontSize: 11, color: "#5a6478" },
-  disclaimer: { margin: "8px 0", padding: "8px 14px", background: "#1a1520", border: "1px solid #2d2235", borderRadius: 8, fontSize: 11, color: "#a78bba", lineHeight: 1.5 },
-  controlBar: { display: "flex", alignItems: "center", gap: 10, margin: "8px 0", flexWrap: "wrap" },
-  refreshBtn: { padding: "7px 16px", fontSize: 12, fontWeight: 700, background: "#1a3a2a", color: "#6ee7b7", border: "1px solid #2a5a3a", borderRadius: 6, cursor: "pointer" },
-  autoBtn: { padding: "7px 14px", fontSize: 11, fontWeight: 600, background: "transparent", color: "#7a8194", border: "1px solid #2a3040", borderRadius: 6, cursor: "pointer" },
-  lastLabel: { fontSize: 11, color: "#5a6478", fontFamily: "'SF Mono',monospace" },
-  aiBox: { margin: "8px 0 16px", padding: "14px 16px", background: "linear-gradient(135deg,#111827 0%,#0f1a12 100%)", border: "1px solid #1a3a2a", borderRadius: 10 },
-  aiHeader: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#6ee7b7" },
-  aiResult: { fontSize: 13, color: "#c8d0dc", marginTop: 10, lineHeight: 1.6 },
-  threeCol: { display: "flex", gap: 16, alignItems: "flex-start" },
-  leftSB: { width: 210, flexShrink: 0, position: "sticky", top: 20, alignSelf: "flex-start", maxHeight: "calc(100vh - 40px)", overflowY: "auto", overflowX: "hidden" },
-  centerCol: { flex: 1, minWidth: 0 },
-  rightSB: { width: 220, flexShrink: 0, position: "sticky", top: 20, alignSelf: "flex-start", maxHeight: "calc(100vh - 40px)", overflowY: "auto", overflowX: "hidden" },
-  // Calculator
-  calcBox: { background: "#111520", border: "1px solid #1e2330", borderRadius: 10, padding: "14px 12px" },
-  calcHead: { display: "flex", alignItems: "center", gap: 6, marginBottom: 12 },
-  cLabel: { display: "block", fontSize: 9, fontWeight: 600, color: "#5a6478", marginTop: 8, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.06em" },
-  cInput: { width: "100%", padding: "6px 8px", fontSize: 12, background: "#0c0f14", border: "1px solid #1e2330", borderRadius: 4, color: "#f0f2f5", outline: "none" },
-  cSelect: { width: "100%", padding: "6px 8px", fontSize: 12, background: "#0c0f14", border: "1px solid #1e2330", borderRadius: 4, color: "#f0f2f5", outline: "none" },
-  cResults: { marginTop: 12, padding: "8px 0", borderTop: "1px solid #1e2330" },
-  cRow: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "#7a8194", padding: "3px 0" },
-  cGraph: { marginTop: 10 },
-  // Tabs
-  tabBar: { display: "flex", gap: 0, margin: "0 0 0", borderBottom: "1px solid #1e2330", overflowX: "auto" },
-  tabBtn: { flex: 1, padding: "10px 6px", fontSize: 11, fontWeight: 600, border: "none", borderBottom: "2px solid transparent", cursor: "pointer", textAlign: "center", borderRadius: "6px 6px 0 0", whiteSpace: "nowrap" },
-  picksHeading: { fontSize: 14, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#7a8194", margin: "20px 0 14px" },
-  card: { marginBottom: 18, padding: "20px", background: "#111520", border: "1px solid #1e2330", borderRadius: 12 },
-  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  ticker: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.04em", color: "#f0f2f5", fontFamily: "'SF Mono',monospace" },
-  companyName: { fontSize: 13, color: "#7a8194", marginTop: 2 },
-  convictionBadge: { display: "inline-block", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "3px 10px", borderRadius: 4, color: "#0c0f14" },
-  priceLabel: { fontSize: 18, fontWeight: 700, color: "#f0f2f5", marginTop: 6 },
-  thesisLine: { marginTop: 14, fontSize: 14, fontWeight: 600, color: "#6ee7b7", letterSpacing: "0.01em" },
-  swingReason: { marginTop: 10, padding: "10px 12px", background: "#0c0f14", borderRadius: 8, borderLeft: "3px solid #6ee7b7" },
-  swingReasonLabel: { fontSize: 9, fontWeight: 700, color: "#6ee7b7", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 },
-  swingReasonText: { fontSize: 12, color: "#8a92a4", lineHeight: 1.6, margin: 0 },
-  sortBar: { display: "flex", alignItems: "center", gap: 4, marginBottom: 14, flexWrap: "wrap" },
-  sortLabel: { fontSize: 10, fontWeight: 600, color: "#5a6478", marginRight: 4 },
-  sortBtn: { padding: "4px 8px", fontSize: 9, fontWeight: 600, background: "transparent", color: "#5a6478", border: "1px solid #1e2330", borderRadius: 4, cursor: "pointer" },
-  metricsRow: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginTop: 16, padding: "12px 0", borderTop: "1px solid #1e2330", borderBottom: "1px solid #1e2330" },
-  metric: { textAlign: "center" }, metricLabel: { fontSize: 10, fontWeight: 600, color: "#5a6478", textTransform: "uppercase", letterSpacing: "0.06em" }, metricValue: { fontSize: 15, fontWeight: 700, color: "#e2e4e9", marginTop: 4 },
-  expandBtn: { marginTop: 14, width: "100%", padding: "8px", fontSize: 12, fontWeight: 600, background: "transparent", color: "#7a8194", border: "1px solid #1e2330", borderRadius: 6, cursor: "pointer" },
-  expandedArea: { marginTop: 16 }, section: { marginBottom: 16 }, sectionTitle: { fontSize: 11, fontWeight: 700, color: "#5a6478", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 },
-  bulletItem: { fontSize: 13, color: "#b0b8c8", marginBottom: 6, paddingLeft: 4, lineHeight: 1.55 }, bulletDot: { color: "#6ee7b7", marginRight: 6 },
-  techText: { fontSize: 13, color: "#b0b8c8", margin: 0, lineHeight: 1.6 },
-  sourceLink: { fontSize: 11, color: "#6ee7b7", textDecoration: "none", background: "#0f1a12", padding: "3px 8px", borderRadius: 4, border: "1px solid #1a3a2a", display: "inline-block" },
-  sourceDate: { color: "#5a7a6a", fontSize: 10 },
-  removeBtn: { background: "none", border: "none", color: "#3a4258", fontSize: 14, cursor: "pointer", padding: "2px 6px" },
-  corrWarning: { display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "#1a1520", border: "1px solid #2d2235", borderRadius: 6, fontSize: 10, color: "#eab308", marginBottom: 8 },
-  signalSummary: { padding: "10px 12px", background: "#0c0f14", borderRadius: 8, marginBottom: 10 },
-  factorsGrid: { display: "flex", flexDirection: "column", gap: 6 },
-  factorCard: { padding: "8px 10px", background: "#0c0f14", borderRadius: 6, borderLeft: "2px solid #1e2330" },
-  factorLabel: { fontSize: 9, fontWeight: 700, color: "#7a8194", letterSpacing: "0.06em" },
-  factorVerdict: { fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: "auto" },
-  factorText: { fontSize: 10, color: "#8a92a4", margin: "2px 0 0", lineHeight: 1.4 },
-  scanSection: { marginTop: 28, padding: "20px", background: "linear-gradient(135deg,#111520 0%,#0f1218 100%)", border: "1px solid #1a2040", borderRadius: 12 },
-  scanHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
-  scanTitle: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa" },
-  scanDesc: { margin: "4px 0 0", fontSize: 11, color: "#5a6478" },
-  scanBtn: { padding: "8px 18px", fontSize: 12, fontWeight: 700, background: "#1a1a3a", color: "#60a5fa", border: "1px solid #2a2a5a", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
-  scanLoading: { fontSize: 12, color: "#5a6478", padding: "16px 0", textAlign: "center" },
-  scanResults: { display: "flex", flexDirection: "column", gap: 12 },
-  scanCard: { padding: "14px", background: "#0c0f14", border: "1px solid #1a2040", borderRadius: 8 },
-  scanCardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 },
-  scanTicker: { fontSize: 18, fontWeight: 800, color: "#f0f2f5", fontFamily: "'SF Mono',monospace", marginRight: 8 },
-  scanName: { fontSize: 12, color: "#7a8194" }, scanPrice: { fontSize: 15, fontWeight: 700, color: "#f0f2f5" },
-  scanConviction: { fontSize: 9, fontWeight: 700 }, scanThesis: { fontSize: 12, color: "#b0b8c8", lineHeight: 1.5, marginBottom: 6 },
-  scanCatalyst: { fontSize: 11, color: "#b0c8b8", marginBottom: 6 }, scanMetrics: { display: "flex", gap: 10, fontSize: 10, color: "#5a6478", flexWrap: "wrap", marginBottom: 6 },
-  promoteBtn: { width: "100%", padding: "6px", fontSize: 11, fontWeight: 600, background: "#1a1a3a", color: "#60a5fa", border: "1px solid #2a2a5a", borderRadius: 5, cursor: "pointer" },
-  watchAddRow: { display: "flex", gap: 8, marginBottom: 14 },
-  watchInput: { flex: 1, padding: "8px 12px", fontSize: 13, background: "#111520", border: "1px solid #1e2330", borderRadius: 6, color: "#f0f2f5", outline: "none" },
-  watchAddBtn: { padding: "8px 16px", fontSize: 12, fontWeight: 700, background: "#1a1520", color: "#a78bba", border: "1px solid #2d2235", borderRadius: 6, cursor: "pointer" },
-  emptyState: { padding: "40px 20px", textAlign: "center", background: "#111520", borderRadius: 10, border: "1px solid #1e2330" },
-  watchCard: { padding: "12px 14px", background: "#111520", border: "1px solid #1e2330", borderRadius: 8 },
-  watchTicker: { fontSize: 16, fontWeight: 800, color: "#f0f2f5", fontFamily: "'SF Mono',monospace" },
-  watchActionBtn: { padding: "3px 10px", fontSize: 10, fontWeight: 600, background: "transparent", color: "#6ee7b7", border: "1px solid #1a3a2a", borderRadius: 4, cursor: "pointer" },
-  analystCard: { padding: "16px", background: "#111520", border: "1px solid #1e2330", borderRadius: 10 },
-  analystTicker: { fontSize: 20, fontWeight: 800, color: "#f0f2f5", fontFamily: "'SF Mono',monospace", marginRight: 8 },
-  analystName: { fontSize: 13, color: "#7a8194" }, analystPrice: { fontSize: 16, fontWeight: 700, color: "#f0f2f5" },
-  analystFirmRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" },
-  analystFirmBadge: { fontSize: 9, fontWeight: 700, background: "#1a1a3a", color: "#60a5fa", padding: "2px 8px", borderRadius: 3 },
-  analystRating: { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em" },
-  analystAbout: { fontSize: 11.5, color: "#8a92a4", lineHeight: 1.55, margin: "8px 0 10px", padding: "8px 10px", background: "#0c0f14", borderRadius: 6, borderLeft: "2px solid #1e2330" },
-  analystSectionLabel: { fontSize: 9, fontWeight: 700, color: "#5a6478", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 },
-  methodology: { marginTop: 32, padding: "18px 20px", background: "#0f1218", border: "1px solid #1e2330", borderRadius: 10 },
-  methTitle: { margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#7a8194", textTransform: "uppercase" },
-  methBody: { fontSize: 12.5, color: "#8a92a4", margin: 0, lineHeight: 1.6 },
-  footer: { marginTop: 32, textAlign: "center", fontSize: 11, color: "#3a4258", padding: "16px 0", borderTop: "1px solid #1a1e2a" },
-  placeholder: { padding: "60px 20px", textAlign: "center", background: "#111520", borderRadius: 12, border: "1px solid #1e2330", margin: "20px 0" },
-};
 const SS = {
   container: { background: "#111520", border: "1px solid #1e2330", borderRadius: 10, padding: "14px 12px" },
   header: { display: "flex", alignItems: "center", gap: 6, marginBottom: 10 },
