@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 
 // --- Helpers ---
 function formatDate(d) { return d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
@@ -586,11 +584,13 @@ function FearGreedGauge() {
 
 // --- News Feed (BBC RSS via free proxy) ---
 const NEWS_CATEGORIES = [
-  { id: "financial", label: "Financial", feed: "https://feeds.bbci.co.uk/news/business/rss.xml" },
-  { id: "us", label: "US News", feed: "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml" },
-  { id: "world", label: "World", feed: "https://feeds.bbci.co.uk/news/world/rss.xml" },
-  { id: "tech", label: "Tech", feed: "https://feeds.bbci.co.uk/news/technology/rss.xml" },
-  { id: "energy", label: "Energy", feed: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml" },
+  { id: "financial", label: "Financial" },
+  { id: "us", label: "US News" },
+  { id: "world", label: "World" },
+  { id: "tech", label: "Tech" },
+  { id: "energy", label: "Energy" },
+  { id: "bbc", label: "BBC" },
+  { id: "forbes", label: "Forbes" },
 ];
 
 function NewsFeed() {
@@ -604,38 +604,33 @@ function NewsFeed() {
       try {
         const res = await fetch("/api/news?category=general");
         const data = await res.json();
+        const categorized = { financial: [], us: [], world: [], tech: [], energy: [], bbc: [], forbes: [] };
         if (data.articles && data.articles.length > 0) {
-          // Categorize articles by keywords
-          const categorized = { financial: [], us: [], world: [], tech: [], energy: [] };
           data.articles.forEach(a => {
-            const t = (a.title + " " + a.summary).toLowerCase();
+            const t = (a.title + " " + (a.summary||"")).toLowerCase();
             if (t.match(/oil|gas|energy|opec|solar|wind|nuclear|crude|petrol/)) categorized.energy.push(a);
             else if (t.match(/tech|ai|software|chip|semiconductor|apple|google|microsoft|meta|nvidia|cyber/)) categorized.tech.push(a);
             else if (t.match(/fed|rate|inflation|gdp|jobs|employment|treasury|bank|stock|market|earnings|revenue|profit|wall street|s&p|dow|nasdaq/)) categorized.financial.push(a);
             else if (t.match(/china|europe|uk|japan|russia|ukraine|india|brazil|middle east|nato|un |eu /)) categorized.world.push(a);
             else categorized.us.push(a);
           });
-          // Ensure each has at least some articles, fill from general pool
           const all = data.articles;
-          Object.keys(categorized).forEach(k => {
-            if (categorized[k].length < 2) {
-              categorized[k] = all.slice(0, 4);
-            } else {
-              categorized[k] = categorized[k].slice(0, 4);
-            }
+          ["financial","us","world","tech","energy"].forEach(k => {
+            if (categorized[k].length < 2) categorized[k] = all.slice(0, 4);
+            else categorized[k] = categorized[k].slice(0, 4);
+            categorized[k] = categorized[k].map(a => ({ title: a.title, source: a.source, url: a.url||"", time: a.time ? new Date(a.time).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "today" }));
           });
-          // Format time
-          Object.keys(categorized).forEach(k => {
-            categorized[k] = categorized[k].map(a => ({
-              title: a.title,
-              source: a.source,
-              url: a.url || "",
-              time: a.time ? new Date(a.time).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "today",
-            }));
-          });
-          setArticles(categorized);
         }
-      } catch (e) { console.error("News fetch failed", e); }
+        // Fetch BBC and Forbes from NewsAPI
+        try {
+          const [bbcRes, forbesRes] = await Promise.all([fetch("/api/newsapi?source=bbc-news"), fetch("/api/newsapi?source=forbes")]);
+          const bbcData = await bbcRes.json();
+          const forbesData = await forbesRes.json();
+          if (bbcData.articles) categorized.bbc = bbcData.articles.slice(0,4).map(a=>({title:a.title,source:"BBC",url:a.url||"",time:a.publishedAt?new Date(a.publishedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"today"}));
+          if (forbesData.articles) categorized.forbes = forbesData.articles.slice(0,4).map(a=>({title:a.title,source:"Forbes",url:a.url||"",time:a.publishedAt?new Date(a.publishedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"today"}));
+        } catch(e) { console.warn("NewsAPI skipped:", e.message); }
+        setArticles(categorized);
+      } catch (e) { console.warn("News fetch failed", e); }
       setLoading(false);
     })();
   }, []);
@@ -1206,7 +1201,7 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
       </header>
 
       <div style={S.navRibbon}>
-        {[{id:"swing",l:"Swing Trading"},{id:"longterm",l:"Long Term"},{id:"shortterm",l:"Short Term"},{id:"about",l:"About"},{id:"contact",l:"Contact Us"}].map(n=>(
+        {[{id:"swing",l:"Swing Trading"},{id:"longterm",l:"Long Term"},{id:"shortterm",l:"Short Term"},{id:"earnings",l:"Earnings Calendar"},{id:"about",l:"About"},{id:"contact",l:"Contact Us"}].map(n=>(
           <button key={n.id} onClick={()=>setNavPage(n.id)} style={{...S.navBtn,color:navPage===n.id?"#6ee7b7":"#7a8194",borderBottom:navPage===n.id?"2px solid #6ee7b7":"2px solid transparent",background:navPage===n.id?"#111520":"transparent"}}>{n.l}</button>
         ))}
       </div>
@@ -1273,7 +1268,7 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
           {/* CENTER: Main content */}
           <div style={S.centerCol}>
             <div style={S.tabBar}>
-              {[{id:"active",l:`🔥 AI Swing Hot List (${picks.length})`},{id:"watchlist",l:`☆ Watchlist (${watchlist.length})`},{id:"analyst",l:`◈ Analyst Picks (${ANALYST_PICKS.length})`},{id:"earnings",l:"◫ Earnings Calendar"}].map(t=>(
+              {[{id:"active",l:`🔥 AI Swing Hot List (${picks.length})`},{id:"watchlist",l:`☆ Watchlist (${watchlist.length})`},{id:"analyst",l:`◈ Analyst Picks (${ANALYST_PICKS.length})`}].map(t=>(
                 <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...S.tabBtn,color:activeTab===t.id?"#f0f2f5":"#5a6478",borderBottom:activeTab===t.id?"2px solid #6ee7b7":"2px solid transparent",background:activeTab===t.id?"#111520":"transparent"}}>{t.l}</button>
               ))}
             </div>
@@ -1307,8 +1302,6 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
               <div style={{display:"flex",flexDirection:"column",gap:10}}>{ANALYST_PICKS.map((ap,i)=>{const aA=picks.some(p=>p.ticker===ap.ticker),aW=watchlist.some(w=>w.ticker===ap.ticker);return<div key={i} style={S.analystCard}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><span style={S.analystTicker}>{ap.ticker}</span><span style={S.analystName}>{ap.name}</span></div><div style={{textAlign:"right"}}><div style={S.analystPrice}>{ap.price}</div><div style={{fontSize:9,color:"#22c55e",fontWeight:700}}>FV:{ap.fairValue} ({ap.upside})</div></div></div><div style={S.analystFirmRow}><span style={S.analystFirmBadge}>{ap.firm}</span><span style={{...S.analystRating,color:ap.rating==="Strong Buy"?"#22c55e":"#84cc16"}}>{ap.rating}</span><span style={{fontSize:9,color:"#5a6478"}}>Moat:{ap.moat}</span></div><div style={S.analystAbout}>{ap.about}</div><div style={S.analystSectionLabel}>Bull Case</div><div style={{fontSize:12,color:"#b0b8c8",lineHeight:1.5,marginBottom:6}}>{ap.thesis}</div><div style={S.analystSectionLabel}>Why Now</div><div style={{fontSize:12,color:"#b0c8b8",lineHeight:1.5,marginBottom:6}}>{ap.whyNow}</div><div style={{fontSize:9,color:"#3a4258",marginBottom:8}}>{ap.source}</div><div style={{display:"flex",gap:6}}><button disabled={aA} onClick={()=>promotePick({ticker:ap.ticker,name:ap.name,price:ap.price,thesis:ap.thesis,conviction:ap.rating==="Strong Buy"?"HIGH":"MODERATE-HIGH",horizon:"2–6 weeks",targetRange:ap.fairValue,stopLoss:"—",riskReward:ap.upside,catalyst:ap.source})} style={{...S.promoteBtn,flex:1,opacity:aA?0.4:1}}>{aA?"✓ Active":"+ Active"}</button><button disabled={aW} onClick={()=>addToWatchlist({ticker:ap.ticker,name:ap.name,price:ap.price,note:`${ap.firm}: ${ap.thesis}`,addedAt:timeStamp(new Date())})} style={{...S.promoteBtn,flex:1,background:"#1a1520",color:"#a78bba",borderColor:"#2d2235",opacity:aW?0.4:1}}>{aW?"✓ Watch":"☆ Watch"}</button></div></div>})}</div>
             </>)}
 
-            {activeTab==="earnings"&&<EarningsCalendar/>}
-
             <footer style={S.footer}>Powered by Claude · All data live · Not financial advice</footer>
           </div>
 
@@ -1321,7 +1314,22 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
       )}
 
       {navPage==="longterm"&&(
-        <div style={{maxWidth:900,margin:"0 auto"}}>
+        <div className="three-col" style={S.threeCol}>
+          <div className="left-sb" style={S.leftSB}>
+            <div style={S.calcBox}><div style={S.calcHead}><span style={{color:"#60a5fa"}}>◈</span> <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"#60a5fa"}}>RETURN CALCULATOR</span></div>
+              <label style={S.cLabel}>Stock Ticker</label><div style={{display:"flex",gap:4}}><input value={calcTicker} onChange={e=>setCalcTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&fetchQuote()} placeholder="e.g. AAPL" style={{...S.cInput,flex:1,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.05em"}}/><button onClick={()=>fetchQuote()} disabled={calcTickerLoading||!calcTicker.trim()} style={{padding:"6px 10px",fontSize:10,fontWeight:700,background:"#1a3a2a",color:"#6ee7b7",border:"1px solid #2a5a3a",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap"}}>{calcTickerLoading?"…":"Get Price"}</button></div>
+              {calcTickerInfo&&<div style={{marginTop:4,fontSize:9,color:"#7a8194"}}><span style={{fontWeight:700,color:"#f0f2f5"}}>{calcTickerInfo.symbol}</span> — ${calcTickerInfo.price?.toFixed(2)} <span style={{color:calcTickerInfo.changePercent>=0?"#22c55e":"#ef4444"}}>{calcTickerInfo.changePercent>=0?"+":""}{calcTickerInfo.changePercent?.toFixed(2)}%</span></div>}
+              {calcTickerError&&<div style={{marginTop:4,fontSize:9,color:"#ef4444"}}>{calcTickerError}</div>}
+              <label style={S.cLabel}>Investment ($)</label><input type="number" value={calcInv} onChange={e=>setCalcInv(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Entry Price ($)</label><input type="number" value={calcEntry} onChange={e=>setCalcEntry(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Exit Price ($)</label><input type="number" value={calcExit} onChange={e=>setCalcExit(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Timeframe</label><select value={calcTF} onChange={e=>setCalcTF(e.target.value)} style={S.cSelect}>{CALC_TFS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select>
+              <div style={S.cResults}><div style={S.cRow}><span>Shares</span><span style={{color:"#f0f2f5",fontWeight:700}}>{calcShares}</span></div><div style={S.cRow}><span>Per-Trade</span><span style={{color:calcPct>=0?"#22c55e":"#ef4444",fontWeight:700}}>{(calcPct*100).toFixed(1)}%</span></div><div style={S.cRow}><span>Final Value</span><span style={{color:"#f0f2f5",fontWeight:700}}>${calcFinal.toLocaleString()}</span></div><div style={S.cRow}><span>Total Return</span><span style={{color:calcReturn>=0?"#22c55e":"#ef4444",fontWeight:700}}>{calcReturn>=0?"+":""}${calcReturn.toLocaleString()} ({calcReturnPct2.toFixed(1)}%)</span></div></div>
+              <div style={S.cGraph}><svg viewBox="0 0 200 80" style={{width:"100%",height:80}}><defs><linearGradient id="gf2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={calcReturn>=0?"#22c55e":"#ef4444"} stopOpacity="0.3"/><stop offset="100%" stopColor={calcReturn>=0?"#22c55e":"#ef4444"} stopOpacity="0"/></linearGradient></defs>{calcData.length>1&&(()=>{const mn=Math.min(...calcData.map(p=>p.v)),mx=Math.max(...calcData.map(p=>p.v)),rg=mx-mn||1;const pts=calcData.map((p,i)=>`${(i/(calcData.length-1))*200},${75-((p.v-mn)/rg)*65}`);return<><path d={`M0,75 L${pts.join(" L")} L200,75 Z`} fill="url(#gf2)"/><path d={`M${pts.join(" L")}`} fill="none" stroke={calcReturn>=0?"#22c55e":"#ef4444"} strokeWidth="1.5"/></>})()}</svg></div>
+            </div>
+            <NewsFeed/>
+          </div>
+          <div style={S.centerCol}>
           <h2 style={S.picksHeading}>Long Term Investment Picks — 6+ Months</h2>
           <div style={{fontSize:11,color:"#5a6478",marginBottom:16}}>Curated from Morningstar, Motley Fool, JPMorgan, and Bank of America Q3 2026 research. Updated monthly.</div>
           {LT_FIRMS.map(firm=>(
@@ -1347,11 +1355,27 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
               ))}
             </div>
           ))}
+          </div>
+          <div className="right-sb" style={S.rightSB}><SectorTrends/><FearGreedGauge/></div>
         </div>
       )}
 
       {navPage==="shortterm"&&(
-        <div style={{maxWidth:900,margin:"0 auto"}}>
+        <div className="three-col" style={S.threeCol}>
+          <div className="left-sb" style={S.leftSB}>
+            <div style={S.calcBox}><div style={S.calcHead}><span style={{color:"#60a5fa"}}>◈</span> <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"#60a5fa"}}>RETURN CALCULATOR</span></div>
+              <label style={S.cLabel}>Stock Ticker</label><div style={{display:"flex",gap:4}}><input value={calcTicker} onChange={e=>setCalcTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&fetchQuote()} placeholder="e.g. AAPL" style={{...S.cInput,flex:1,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.05em"}}/><button onClick={()=>fetchQuote()} disabled={calcTickerLoading||!calcTicker.trim()} style={{padding:"6px 10px",fontSize:10,fontWeight:700,background:"#1a3a2a",color:"#6ee7b7",border:"1px solid #2a5a3a",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap"}}>{calcTickerLoading?"…":"Get Price"}</button></div>
+              {calcTickerInfo&&<div style={{marginTop:4,fontSize:9,color:"#7a8194"}}><span style={{fontWeight:700,color:"#f0f2f5"}}>{calcTickerInfo.symbol}</span> — ${calcTickerInfo.price?.toFixed(2)} <span style={{color:calcTickerInfo.changePercent>=0?"#22c55e":"#ef4444"}}>{calcTickerInfo.changePercent>=0?"+":""}{calcTickerInfo.changePercent?.toFixed(2)}%</span></div>}
+              {calcTickerError&&<div style={{marginTop:4,fontSize:9,color:"#ef4444"}}>{calcTickerError}</div>}
+              <label style={S.cLabel}>Investment ($)</label><input type="number" value={calcInv} onChange={e=>setCalcInv(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Entry Price ($)</label><input type="number" value={calcEntry} onChange={e=>setCalcEntry(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Exit Price ($)</label><input type="number" value={calcExit} onChange={e=>setCalcExit(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Timeframe</label><select value={calcTF} onChange={e=>setCalcTF(e.target.value)} style={S.cSelect}>{CALC_TFS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select>
+              <div style={S.cResults}><div style={S.cRow}><span>Shares</span><span style={{color:"#f0f2f5",fontWeight:700}}>{calcShares}</span></div><div style={S.cRow}><span>Per-Trade</span><span style={{color:calcPct>=0?"#22c55e":"#ef4444",fontWeight:700}}>{(calcPct*100).toFixed(1)}%</span></div><div style={S.cRow}><span>Final Value</span><span style={{color:"#f0f2f5",fontWeight:700}}>${calcFinal.toLocaleString()}</span></div><div style={S.cRow}><span>Total Return</span><span style={{color:calcReturn>=0?"#22c55e":"#ef4444",fontWeight:700}}>{calcReturn>=0?"+":""}${calcReturn.toLocaleString()} ({calcReturnPct2.toFixed(1)}%)</span></div></div>
+            </div>
+            <NewsFeed/>
+          </div>
+          <div style={S.centerCol}>
           <h2 style={S.picksHeading}>Short Term Trades — 1 Day to 4 Weeks</h2>
           <div style={{fontSize:11,color:"#5a6478",marginBottom:8}}>Sentiment-driven picks based on social media momentum, technical setups, and near-term catalysts. Sorted by timeframe.</div>
           <div style={{fontSize:10,color:"#eab308",marginBottom:16,padding:"8px 12px",background:"#1a1520",borderRadius:6,border:"1px solid #2d2235"}}>⚠ Short-term trades carry higher risk. These picks are driven by market sentiment and momentum — always use stop-losses and position size appropriately.</div>
@@ -1381,6 +1405,28 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
             </div>
           ))}
           <div style={S.methodology}><h3 style={S.methTitle}>How Social Sentiment Works</h3><p style={S.methBody}>Mention counts are sourced from Reddit (r/wallstreetbets, r/stocks, r/investing), Twitter/X cashtags, and StockTwits. High mention volume can precede short-term price moves but cuts both ways — use as one signal among many, never as the sole basis for a trade. Sentiment data is refreshed daily.</p></div>
+          </div>
+          <div className="right-sb" style={S.rightSB}><SectorTrends/><FearGreedGauge/></div>
+        </div>
+      )}
+
+      {navPage==="earnings"&&(
+        <div className="three-col" style={S.threeCol}>
+          <div className="left-sb" style={S.leftSB}>
+            <div style={S.calcBox}><div style={S.calcHead}><span style={{color:"#60a5fa"}}>◈</span> <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"#60a5fa"}}>RETURN CALCULATOR</span></div>
+              <label style={S.cLabel}>Stock Ticker</label><div style={{display:"flex",gap:4}}><input value={calcTicker} onChange={e=>setCalcTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&fetchQuote()} placeholder="e.g. AAPL" style={{...S.cInput,flex:1,textTransform:"uppercase",fontWeight:700,letterSpacing:"0.05em"}}/><button onClick={()=>fetchQuote()} disabled={calcTickerLoading||!calcTicker.trim()} style={{padding:"6px 10px",fontSize:10,fontWeight:700,background:"#1a3a2a",color:"#6ee7b7",border:"1px solid #2a5a3a",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap"}}>{calcTickerLoading?"…":"Get Price"}</button></div>
+              <label style={S.cLabel}>Investment ($)</label><input type="number" value={calcInv} onChange={e=>setCalcInv(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Entry Price ($)</label><input type="number" value={calcEntry} onChange={e=>setCalcEntry(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Exit Price ($)</label><input type="number" value={calcExit} onChange={e=>setCalcExit(Number(e.target.value)||0)} style={S.cInput}/>
+              <label style={S.cLabel}>Timeframe</label><select value={calcTF} onChange={e=>setCalcTF(e.target.value)} style={S.cSelect}>{CALC_TFS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select>
+              <div style={S.cResults}><div style={S.cRow}><span>Shares</span><span style={{color:"#f0f2f5",fontWeight:700}}>{calcShares}</span></div><div style={S.cRow}><span>Per-Trade</span><span style={{color:calcPct>=0?"#22c55e":"#ef4444",fontWeight:700}}>{(calcPct*100).toFixed(1)}%</span></div><div style={S.cRow}><span>Final Value</span><span style={{color:"#f0f2f5",fontWeight:700}}>${calcFinal.toLocaleString()}</span></div><div style={S.cRow}><span>Total Return</span><span style={{color:calcReturn>=0?"#22c55e":"#ef4444",fontWeight:700}}>{calcReturn>=0?"+":""}${calcReturn.toLocaleString()} ({calcReturnPct2.toFixed(1)}%)</span></div></div>
+            </div>
+            <NewsFeed/>
+          </div>
+          <div style={S.centerCol}>
+            <EarningsCalendar/>
+          </div>
+          <div className="right-sb" style={S.rightSB}><SectorTrends/><FearGreedGauge/></div>
         </div>
       )}
 
@@ -1394,13 +1440,16 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
           <p style={{color:"#8a92a4",lineHeight:1.8,fontSize:14,marginBottom:16}}>Swing Trading Desk takes the research that Wall Street analysts at Morningstar, JPMorgan, Goldman Sachs, and Motley Fool spend weeks producing, and distills it into clear, actionable trade ideas that anyone can understand. No jargon walls. No paywall gatekeeping. No intimidation.</p>
           <p style={{color:"#8a92a4",lineHeight:1.8,fontSize:14,marginBottom:16}}>We use AI to sift through the noise so you don't have to. Every pick on this dashboard comes with a plain-English explanation of why it matters, what could go right, what could go wrong, and exactly where to set your stop-loss. We show our work — every source is linked, every thesis is explained.</p>
           <p style={{color:"#6ee7b7",lineHeight:1.8,fontSize:14,fontWeight:600,marginBottom:16}}>Our mission is simple: help middle and lower-class individuals participate in wealth-building opportunities that were previously locked behind expensive subscriptions and insider knowledge.</p>
-          <p style={{color:"#5a6478",lineHeight:1.8,fontSize:12,marginBottom:0,fontStyle:"italic"}}>This site is for educational purposes only and does not constitute financial advice. Always do your own research and consult a licensed financial advisor before making investment decisions. Past performance does not guarantee future results.</p>
+          <div style={{padding:"16px",background:"#0c0f14",borderRadius:10,border:"1px solid #1e2330",marginBottom:16}}>
+            <p style={{color:"#eab308",lineHeight:1.8,fontSize:13,fontWeight:600,marginBottom:8}}>🚧 This is a work in progress.</p>
+            <p style={{color:"#8a92a4",lineHeight:1.7,fontSize:12,marginBottom:8}}>I created this project to help myself make better-informed trading decisions, and I figured — why not share it with the world? This is being built in my free time as a learning opportunity and a passion project. Features are constantly being added, improved, and refined.</p>
+            <p style={{color:"#8a92a4",lineHeight:1.7,fontSize:12,marginBottom:0}}>Nothing on this website is intended to be financial advice, nor should it be taken as such. I simply wanted one place that aggregates recommendations from major financial institutions so I don't have to read through hundreds of reports myself. This website does not intend to own, represent, or be affiliated with any of the companies, institutions, or data sources referenced. All data and recommendations are attributed to their original sources. Use this information at your own risk and always do your own research.</p>
+          </div>
+          <p style={{color:"#5a6478",lineHeight:1.8,fontSize:12,marginBottom:0,fontStyle:"italic"}}>This site is for educational and informational purposes only. It does not constitute financial advice and should not be relied upon for investment decisions. Past performance does not guarantee future results. Always consult a licensed financial advisor before making investment decisions.</p>
         </div>
       )}
 
-      {navPage==="contact"&&<div style={S.placeholder}><div style={{fontSize:28,marginBottom:8}}>✉</div><h2 style={{color:"#f0f2f5",marginBottom:8}}>Contact Us</h2><p style={{color:"#5a6478"}}>Have feedback or questions? Email: contact@swingtradedesk.com</p></div>}
-      <Analytics />
-      <SpeedInsights />
+      {navPage==="contact"&&<div style={S.placeholder}><div style={{fontSize:28,marginBottom:8}}>✉</div><h2 style={{color:"#f0f2f5",marginBottom:8}}>Contact Us</h2><p style={{color:"#5a6478"}}>Coming Soon</p></div>}
     </div>
   );
 }
