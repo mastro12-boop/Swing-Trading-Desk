@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
+
 // --- Helpers ---
 function formatDate(d) { return d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
 function timeStamp(d) { return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }); }
@@ -1398,6 +1400,7 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
 
       {navPage==="contact"&&<div style={S.placeholder}><div style={{fontSize:28,marginBottom:8}}>✉</div><h2 style={{color:"#f0f2f5",marginBottom:8}}>Contact Us</h2><p style={{color:"#5a6478"}}>Have feedback or questions? Email: contact@swingtradedesk.com</p></div>}
       <Analytics />
+      <SpeedInsights />
     </div>
   );
 }
