@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Analytics } from "@vercel/analytics/next";
 
 // --- Helpers ---
 function formatDate(d) { return d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
@@ -1397,6 +1398,7 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
       )}
 
       {navPage==="contact"&&<div style={S.placeholder}><div style={{fontSize:28,marginBottom:8}}>✉</div><h2 style={{color:"#f0f2f5",marginBottom:8}}>Contact Us</h2><p style={{color:"#5a6478"}}>Have feedback or questions? Email: contact@swingtradedesk.com</p></div>}
+      <Analytics />
     </div>
   );
 }
