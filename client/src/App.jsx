@@ -600,41 +600,45 @@ const SECTOR_FALLBACK = {
 function SectorTrends() {
   const SS = makeWidgetStyles().SS;
   const [idx, setIdx] = useState(0);
-  const [data, setData] = useState(SECTOR_FALLBACK); // Render fallback immediately
+  const [data, setData] = useState(SECTOR_FALLBACK);
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const cacheRef = useRef({ ts: 0, data: null });
+  const CACHE_INTERVAL = 60 * 60 * 1000; // 1 hour
 
   useEffect(() => { const id = setInterval(() => setIdx(i => (i + 1) % 4), 7000); return () => clearInterval(id); }, []);
 
-  const fetchSectors = useCallback(async () => {
+  const fetchSectors = useCallback(async (force) => {
+    if (!force && cacheRef.current.data && Date.now() - cacheRef.current.ts < CACHE_INTERVAL) {
+      setData(cacheRef.current.data); setLive(true); return;
+    }
     setLoading(true);
     try {
-      const raw = await callClaude(
-        `Today is ${formatDate(new Date())}. You are a market data analyst. Based on your knowledge of current S&P 500 sector performance, estimate the performance of all 11 GICS sectors across 4 timeframes.\n\nReturn a JSON object with 4 keys: "day","week","month","ytd". Each value is an array of 11 sectors sorted best-to-worst: [{"s":"Information Technology","v":1.25},{"s":"Energy","v":-0.30}] where v is the estimated percent change (negative if down).\n\nThe 11 GICS sectors: Information Technology, Health Care, Financials, Consumer Discretionary, Communication Services, Industrials, Consumer Staples, Energy, Utilities, Real Estate, Materials.\n\nday=today's performance, week=past 5 trading days, month=past 30 days, ytd=year to date ${new Date().getFullYear()}.\n\nRespond with ONLY the JSON object, nothing else.`,
-        "You are a sector performance data API. Use your knowledge of recent market trends to estimate sector returns. Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation."
-      );
-      const obj = parseJSON(raw, "object");
-      if (obj) {
+      const res = await fetch("/api/sectors");
+      const json = await res.json();
+      if (json.sectors) {
         const parsed = {};
-        let hasData = false;
         TF_KEYS.forEach(k => {
-          if (Array.isArray(obj[k]) && obj[k].length > 0) {
-            parsed[k] = obj[k].filter(i => i.s && typeof i.v === "number").map(i => ({
-              name: String(i.s).replace("Information Technology", "Technology").replace("Communication Services", "Comm Services").replace("Consumer Discretionary", "Consumer Disc.").trim(),
-              value: i.v,
-              display: (i.v >= 0 ? "+" : "") + i.v.toFixed(2) + "%",
+          if (Array.isArray(json.sectors[k]) && json.sectors[k].length > 0) {
+            parsed[k] = json.sectors[k].map(s => ({
+              name: s.name,
+              value: s.value,
+              display: (s.value >= 0 ? "+" : "") + s.value.toFixed(2) + "%",
             }));
-            if (parsed[k].length > 0) hasData = true;
           }
         });
-        if (hasData) { setData(prev => ({ ...prev, ...parsed })); setLive(true); }
+        if (Object.keys(parsed).length > 0) {
+          const merged = { ...SECTOR_FALLBACK, ...parsed };
+          setData(merged);
+          setLive(true);
+          cacheRef.current = { ts: Date.now(), data: merged };
+        }
       }
     } catch (e) { console.warn("Sector fetch skipped:", e.message); }
     setLoading(false);
   }, []);
 
-  // Try to fetch live data on mount (fallback already showing)
-  useEffect(() => { const t = setTimeout(fetchSectors, 15000); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => fetchSectors(false), 2000); return () => clearTimeout(t); }, []);
 
   const rows = data[TF_KEYS[idx]] || [];
   const [progress, setProgress] = useState(0);
