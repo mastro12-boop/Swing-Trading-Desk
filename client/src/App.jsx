@@ -1124,50 +1124,70 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
     setPulseLoading(false);
   }, []);
 
-  // --- PHASE 2: All picks combined in ONE call (basic data only) ---
+  // --- PHASE 2: Live prices from Finnhub + AI analysis ---
   const refreshPicks = useCallback(async (currentPicks) => {
     setPicksLoading(true);
-    const tickers = currentPicks.map(p => `${p.ticker} (${p.name}) — thesis: "${p.thesis}", price: ${p.price}, target: ${p.targetRange}, stop: ${p.stopLoss}`).join("\n");
 
+    // STEP 1: Fetch live prices from Finnhub (fast, reliable, no AI)
     try {
+      const tickers = currentPicks.map(p => p.ticker);
+      const quotePromises = tickers.map(t => fetch(`/api/quote?symbol=${t}`).then(r => r.json()).catch(() => null));
+      const quotes = await Promise.all(quotePromises);
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+      setPicks(prev => prev.map((pick, i) => {
+        const q = quotes[i];
+        if (!q || !q.price) return pick;
+        return {
+          ...pick,
+          price: `$${q.price.toFixed(2)}`,
+          priceNum: q.price,
+          priceDate: dateStr,
+          entryPrice: pick.entryPrice || pick.priceNum, // lock entry on first load
+        };
+      }));
+    } catch (e) { console.warn("Finnhub quotes skipped:", e.message); }
+
+    // STEP 2: AI analysis for thesis/conviction/catalysts (staggered, can fail silently)
+    try {
+      const tickers = currentPicks.map(p => `${p.ticker} (${p.name}) — thesis: "${p.thesis}", price: ${p.price}, target: ${p.targetRange}, stop: ${p.stopLoss}`).join("\n");
       const raw = await callClaude(
-        `Today is ${formatDate(new Date())}. You are a stock analyst. Provide current analysis for these stocks:\n${tickers}\n\nFor each stock, use your knowledge of recent price action, earnings, news, and technicals to provide an updated assessment.\n\nReturn ONLY a JSON array:\n[{"ticker":"XXXX","price":"$XX.XX","priceNum":55.50,"priceDate":"Jul 25","thesis":"2-3 sentence current assessment","conviction":"HIGH/MODERATE-HIGH/MODERATE/LOW","status":"ACTIVE/CLOSE/WATCH","catalysts":["c1","c2"],"risks":["r1"],"technicals":"1-2 sentence technical view"}]\nStatus: ACTIVE if thesis holds, CLOSE if broken, WATCH if uncertain. ONLY the JSON array.`,
-        "You are a stock data API. Use your knowledge of current market conditions, recent earnings reports, price levels, and news. Respond ONLY with a JSON array. No markdown, no backticks."
+        `Today is ${formatDate(new Date())}. You are a stock analyst. Provide current analysis for these stocks:\n${tickers}\n\nFor each stock, use your knowledge of recent price action, earnings, news, and technicals to provide an updated assessment.\n\nReturn ONLY a JSON array:\n[{"ticker":"XXXX","thesis":"2-3 sentence current assessment","conviction":"HIGH/MODERATE-HIGH/MODERATE/LOW","status":"ACTIVE/CLOSE/WATCH","catalysts":["c1","c2"],"risks":["r1"],"technicals":"1-2 sentence technical view"}]\nStatus: ACTIVE if thesis holds, CLOSE if broken, WATCH if uncertain. Do NOT include price fields - prices come from a separate source. ONLY the JSON array.`,
+        "You are a stock data API. Use your knowledge of current market conditions, recent earnings reports, and news. Respond ONLY with a JSON array. No markdown, no backticks."
       );
       const arr = parseJSON(raw, "array");
       if (arr && Array.isArray(arr)) {
-        const updatedPicks = currentPicks.map(pick => {
+        setPicks(prev => prev.map(pick => {
           const upd = arr.find(a => a.ticker === pick.ticker);
           if (!upd) return pick;
           return { ...pick,
-            price: upd.price || pick.price,
-            priceNum: upd.priceNum || pick.priceNum,
-            priceDate: upd.priceDate || pick.priceDate,
-            entryPrice: pick.entryPrice || pick.priceNum,
             thesis: upd.thesis || pick.thesis,
             conviction: upd.conviction || pick.conviction,
             catalysts: upd.catalysts?.length ? upd.catalysts : pick.catalysts,
             risks: upd.risks?.length ? upd.risks : pick.risks,
             technicals: upd.technicals || pick.technicals,
           };
-        });
-        setPicks(updatedPicks);
+        }));
         const statuses = {};
         arr.forEach(a => { if (a.status) statuses[a.ticker] = a.status; });
         setPickStatuses(statuses);
-
-        // Regenerate baseline signals with updated data
-        const newSignals = {};
-        updatedPicks.forEach(p => { newSignals[p.ticker] = generateBaselineSignal(p); });
-        setEntrySignals(prev => ({ ...prev, ...newSignals }));
-
-        // If signal cache is stale, fire a separate lightweight AI signal call
-        const now = Date.now();
-        if (now - signalCacheRef.current.ts >= SIGNAL_COOLDOWN) {
-          refreshSignals(updatedPicks);
-        }
       }
-    } catch (e) { console.warn("Pick refresh skipped:", e.message); }
+    } catch (e) { console.warn("AI analysis skipped:", e.message); }
+
+    // STEP 3: Regenerate signals from updated data
+    setPicks(prev => {
+      const newSignals = {};
+      prev.forEach(p => { newSignals[p.ticker] = generateBaselineSignal(p); });
+      setEntrySignals(old => ({ ...old, ...newSignals }));
+
+      const now = Date.now();
+      if (now - signalCacheRef.current.ts >= SIGNAL_COOLDOWN) {
+        refreshSignals(prev);
+      }
+      return prev;
+    });
+
     setPicksLoading(false);
     setLastRefresh(new Date());
   }, []);
