@@ -192,6 +192,10 @@ function BubbleBackground() {
   );
 }
 
+// Module-level style reference (updated by theme switcher)
+let S = makeStyles(THEMES.dark);
+let T_REF = THEMES.dark;
+
 // --- Helpers ---
 function formatDate(d) { return d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
 function timeStamp(d) { return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }); }
@@ -199,15 +203,8 @@ function timeStamp(d) { return d.toLocaleTimeString("en-US", { hour: "numeric", 
 // --- Simplified single-shot API call with retry on rate limit ---
 async function callClaude(prompt, sys, retries = 2) {
   for (let i = 0; i <= retries; i++) {
-    const res = await fetch("/api/ai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, system: sys }),
-    });
-    if (res.status === 429 && i < retries) {
-      await new Promise(r => setTimeout(r, (i + 1) * 5000));
-      continue;
-    }
+    const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: sys }) });
+    if (res.status === 429 && i < retries) { await new Promise(r => setTimeout(r, (i + 1) * 5000)); continue; }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     return data.text || "";
@@ -1067,7 +1064,8 @@ export default function SwingTradeDashboard() {
     try { return sessionStorage.getItem("std_theme") || "dark"; } catch { return "dark"; }
   });
   const T = THEMES[themeId] || THEMES.dark;
-  const S = makeStyles(T);
+  S = makeStyles(T);
+  T_REF = T;
 
   const switchTheme = (id) => {
     setThemeId(id);
