@@ -704,36 +704,9 @@ function setFGCache(data) { try { sessionStorage.setItem(FG_CACHE_KEY, JSON.stri
 
 function FearGreedGauge() {
   const FG = makeWidgetStyles().FG;
-  const cached = getFGCache();
-  const [data, setData] = useState(cached || FG_FALLBACK);
-  const [live, setLive] = useState(!!cached);
+  const [data, setData] = useState(FG_FALLBACK);
+  const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [lastFetch, setLastFetch] = useState(cached ? new Date(cached.ts) : null);
-
-  const fetchFG = useCallback(async (force) => {
-    // Only fetch if forced or cache is stale (>12hrs)
-    if (!force) {
-      const c = getFGCache();
-      if (c) { setData(c); setLive(true); setLastFetch(new Date(c.ts)); return; }
-    }
-    setLoading(true);
-    try {
-      const raw = await callClaude(
-        `Today is ${formatDate(new Date())}. You are a market sentiment analyst. Based on your knowledge of current market conditions, estimate the CNN Fear & Greed Index. Consider: stock price momentum (S&P 500 vs 125-day MA), stock price strength (52-week highs vs lows), stock price breadth (advancing vs declining volume), put/call ratio, market volatility (VIX vs 50-day MA), safe haven demand (bonds vs stocks), and junk bond demand (yield spread). Return ONLY a JSON object: {"now":41,"now_label":"Fear","week_ago":37,"week_label":"Fear","month_ago":70,"month_label":"Greed","year_ago":55,"year_label":"Neutral"}. Labels: 0-24 Extreme Fear, 25-44 Fear, 45-55 Neutral, 56-74 Greed, 75-100 Extreme Greed. ONLY the JSON.`,
-        "You are a sentiment data API. Estimate the CNN Fear & Greed Index using your knowledge of current market conditions. Respond ONLY with a JSON object. No markdown, no backticks."
-      );
-      const obj = parseJSON(raw, "object");
-      if (obj && typeof obj.now === "number") {
-        setData(obj);
-        setLive(true);
-        setFGCache(obj);
-        setLastFetch(new Date());
-      }
-    } catch (e) { console.warn("FG fetch skipped:", e.message); }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { const t = setTimeout(() => fetchFG(false), 22000); return () => clearTimeout(t); }, []);
 
   const gc = v => v <= 24 ? "#dc2626" : v <= 44 ? "#f97316" : v <= 55 ? "#eab308" : v <= 74 ? "#84cc16" : "#22c55e";
   const GR = ({ label, value, sentiment }) => {
@@ -756,9 +729,8 @@ function FearGreedGauge() {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={FG.source}>CNN Business · Updates 2x/day</div>
-        <button onClick={() => fetchFG(true)} disabled={loading} style={{ fontSize: 9, background: "none", border: "none", color: "#5a6478", cursor: "pointer" }}>{loading ? "…" : "↻"}</button>
       </div>
-      {lastFetch && <div style={{ fontSize: 8, color: "#3a4258", paddingLeft: 18, marginBottom: 6 }}>Last: {timeStamp(lastFetch)}</div>}
+      <div style={FG.source}>CNN Business · Baseline estimate</div>
       <div style={FG.bigValue}><span style={{ ...FG.bigNum, color: gc(data.now) }}>{data.now}</span><span style={{ ...FG.bigLabel, color: gc(data.now) }}>{data.now_label}</span></div>
       <div style={FG.mainGaugeOuter}>
         <div style={FG.mainGaugeTrack}>
@@ -1128,11 +1100,8 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
     setPulseLoading(false);
   }, []);
 
-  // --- PHASE 2: Live prices from Finnhub + AI analysis ---
-  const refreshPicks = useCallback(async (currentPicks) => {
-    setPicksLoading(true);
-
-    // STEP 1: Fetch live prices from Finnhub (fast, reliable, no AI)
+  // --- PHASE 2: Live prices from Finnhub (runs on every load/refresh) ---
+  const refreshPrices = useCallback(async (currentPicks) => {
     try {
       const tickers = currentPicks.map(p => p.ticker);
       const quotePromises = tickers.map(t => fetch(`/api/quote?symbol=${t}`).then(r => r.json()).catch(() => null));
@@ -1140,20 +1109,25 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
       const now = new Date();
       const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-      setPicks(prev => prev.map((pick, i) => {
-        const q = quotes[i];
-        if (!q || !q.price) return pick;
-        return {
-          ...pick,
-          price: `$${q.price.toFixed(2)}`,
-          priceNum: q.price,
-          priceDate: dateStr,
-          entryPrice: pick.entryPrice || pick.priceNum, // lock entry on first load
-        };
-      }));
+      setPicks(prev => {
+        const updated = prev.map((pick, i) => {
+          const q = quotes[i];
+          if (!q || !q.price) return pick;
+          return { ...pick, price: `$${q.price.toFixed(2)}`, priceNum: q.price, priceDate: dateStr, entryPrice: pick.entryPrice || pick.priceNum };
+        });
+        // Regenerate signals from new prices
+        const newSignals = {};
+        updated.forEach(p => { newSignals[p.ticker] = generateBaselineSignal(p); });
+        setEntrySignals(old => ({ ...old, ...newSignals }));
+        return updated;
+      });
     } catch (e) { console.warn("Finnhub quotes skipped:", e.message); }
+    setLastRefresh(new Date());
+  }, []);
 
-    // STEP 2: AI analysis for thesis/conviction/catalysts (staggered, can fail silently)
+  // --- PHASE 2b: AI analysis (only on manual "Refresh All" click) ---
+  const refreshAIAnalysis = useCallback(async (currentPicks) => {
+    setPicksLoading(true);
     try {
       const tickers = currentPicks.map(p => `${p.ticker} (${p.name}) — thesis: "${p.thesis}", price: ${p.price}, target: ${p.targetRange}, stop: ${p.stopLoss}`).join("\n");
       const raw = await callClaude(
@@ -1165,35 +1139,14 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
         setPicks(prev => prev.map(pick => {
           const upd = arr.find(a => a.ticker === pick.ticker);
           if (!upd) return pick;
-          return { ...pick,
-            thesis: upd.thesis || pick.thesis,
-            conviction: upd.conviction || pick.conviction,
-            catalysts: upd.catalysts?.length ? upd.catalysts : pick.catalysts,
-            risks: upd.risks?.length ? upd.risks : pick.risks,
-            technicals: upd.technicals || pick.technicals,
-          };
+          return { ...pick, thesis: upd.thesis || pick.thesis, conviction: upd.conviction || pick.conviction, catalysts: upd.catalysts?.length ? upd.catalysts : pick.catalysts, risks: upd.risks?.length ? upd.risks : pick.risks, technicals: upd.technicals || pick.technicals };
         }));
         const statuses = {};
         arr.forEach(a => { if (a.status) statuses[a.ticker] = a.status; });
         setPickStatuses(statuses);
       }
     } catch (e) { console.warn("AI analysis skipped:", e.message); }
-
-    // STEP 3: Regenerate signals from updated data
-    setPicks(prev => {
-      const newSignals = {};
-      prev.forEach(p => { newSignals[p.ticker] = generateBaselineSignal(p); });
-      setEntrySignals(old => ({ ...old, ...newSignals }));
-
-      const now = Date.now();
-      if (now - signalCacheRef.current.ts >= SIGNAL_COOLDOWN) {
-        refreshSignals(prev);
-      }
-      return prev;
-    });
-
     setPicksLoading(false);
-    setLastRefresh(new Date());
   }, []);
 
   // --- PHASE 3: Separate AI signal evaluation (4hr cooldown) ---
@@ -1228,26 +1181,25 @@ FORMAT: Write 4-5 concise sentences covering the above. Be specific with numbers
     } catch (e) { console.warn("Signal refresh skipped:", e.message); }
   }, []);
 
-  // --- Progressive load on mount: stagger calls to avoid rate limits ---
+  // --- Progressive load on mount: pulse (1 Gemini call) + prices (Finnhub, no AI) ---
   useEffect(() => {
     refreshPulse();
-    // Stagger picks 8s after pulse to avoid Gemini rate limit
-    const t1 = setTimeout(() => refreshPicks(BASELINE_PICKS), 8000);
-    return () => clearTimeout(t1);
+    refreshPrices(BASELINE_PICKS);
   }, []);
 
-  // Manual full refresh — stagger picks after pulse
+  // Manual full refresh — pulse + prices + AI analysis (2 Gemini calls max)
   const runFullRefresh = useCallback(() => {
     refreshPulse();
-    setTimeout(() => refreshPicks(picks), 8000);
-  }, [picks, refreshPulse, refreshPicks]);
+    refreshPrices(picks);
+    setTimeout(() => refreshAIAnalysis(picks), 8000); // stagger AI call
+  }, [picks, refreshPulse, refreshPrices, refreshAIAnalysis]);
 
-  // Auto-refresh (5m) — only refreshes pulse + picks, NOT sidebar (cached)
+  // Auto-refresh (5m) — only refreshes prices (no AI calls)
   useEffect(() => {
-    if (autoOn) autoRef.current = setInterval(runFullRefresh, 5 * 60 * 1000);
+    if (autoOn) autoRef.current = setInterval(() => { refreshPrices(picks); }, 5 * 60 * 1000);
     else if (autoRef.current) clearInterval(autoRef.current);
     return () => { if (autoRef.current) clearInterval(autoRef.current); };
-  }, [autoOn, runFullRefresh]);
+  }, [autoOn, refreshPrices, picks]);
 
   const runScanner = useCallback(async () => {
     setScanLoading(true);
